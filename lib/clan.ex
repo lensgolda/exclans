@@ -1,3 +1,3 @@
 defmodule CLAN do
-  defstruct [:id, :name, :leader, users: MapSet.new()]
+  defstruct [:id, :name, :leader, :tag, users: MapSet.new()]
 end

@@ -8,35 +8,44 @@ defmodule SERVER do
 
   defp loop(state) do
     receive do
+      # List all clans
       {:list, caller} ->
-        %{clans: clans} = state
-        send(caller, {:ok, clans})
+        send(caller, {:ok, state.clans})
         loop(state)
-
+      
+      # Get clan by ID
       {:get, id, caller} ->
-        send(caller, Map.get(state.clans, id))
-        loop(state)
-
-      {:create, clan_name, user, caller} ->
-        %{clans: clans} = state
+        case Map.get(state.clans, id) do
+          %CLAN{} ->
+            send(caller, state.clans[id])
+          nil ->
+            send(caller, {:error, :clan_not_found})
+            loop(state)
+        end
+      
+      # Creates clan, where clan_data is 
+      # a map with :name and :tag keys required
+      {:create, clan_data, user, caller} ->
+        # %{clans: clans} = state
+        %{name: name, tag: tag} = clan_data
 
         clan? =
-          clans
+          state.clans
           |> Map.values()
-          |> Enum.find(fn clan -> clan.name == clan_name end)
+          |> Enum.find(fn clan -> clan.tag == tag || clan.name == name end)
 
         case clan? do
-          %CLAN{name: _} ->
-            send(caller, {:error, :clan_name_already_exists})
+          %CLAN{} ->
+            send(caller, {:error, :clan_name_or_tag_already_exists})
             loop(state)
 
           nil ->
             id = UUID.uuid1()
-            clan = %CLAN{id: id, name: clan_name, users: MapSet.new([user_upd]), leader: user.id}
-            user_upd = %{user | clans: MapSet.put(user.clans, clan)}
+            clan = %CLAN{id: id, name: name, tag: tag, users: MapSet.new([user.id]), leader: user.id}
+            user_upd = %{user | clans: MapSet.put(user.clans, clan.id)}
             
-            send(caller, {:ok, clan})
-            loop(%{state | clans: Map.put(clans, id, clan)})
+            send(caller, {:ok, clan, user_upd})
+            loop(%{state | clans: Map.put(state.clans, id, clan)})
         end
 
       {:invite, user, clan_id, caller} ->
@@ -45,7 +54,8 @@ defmodule SERVER do
         invited? =
           invites
           |> Map.values()
-          |> Enum.find(fn invited -> invited[:user].id == user.id end)
+          # or simply find by invite_id
+          |> Enum.find(fn invite -> invite.user.id == user.id end)
 
         clan = Map.get(clans, clan_id)
 
@@ -76,9 +86,9 @@ defmodule SERVER do
 
         case Map.get(invites, invite_id) do
           %{user: user, clan: clan} ->
-            user_upd = %{user | clans: MapSet.put(user.clans, clan)}
-            # clan_upd = %{clan | users: MapSet.put(clan.users, user)}
-            clans_upd = put_in(clans[clan.id].users, [user_upd | clan.users])
+            # possibly get_and_update_in?
+            user_upd = %{user | clans: MapSet.put(user.clans, clans[clan.id])}
+            clans_upd = put_in(clans[clan.id].users, MapSet.put(clans[clan.id].users, user.id))
             invites_upd = Map.delete(invites, invite_id)
             send(caller, {:ok, user_upd})
             loop(%{state | clans: clans_upd, invites: invites_upd})
@@ -96,9 +106,9 @@ defmodule SERVER do
 
       {:kick, user, clan_id, caller} ->
         clan = state.clans[clan_id]
-        case MapSet.member?(clan.users, user) do
+        case MapSet.member?(clan.users, user.id) do
           true ->
-            state_upd = put_in(state.clans[clan_id].users, MapSet.delete(clan.users, user))
+            state_upd = put_in(state.clans[clan_id].users, MapSet.delete(clan.users, user.id))
             send(caller, {:ok, :kicked})
             loop(state_upd)
           false ->
