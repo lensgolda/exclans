@@ -17,7 +17,7 @@ defmodule SERVER do
       {:get, id, caller} ->
         case Map.get(state.clans, id) do
           %CLAN{} ->
-            send(caller, state.clans[id])
+            send(caller, {:ok, state.clans[id]})
           nil ->
             send(caller, {:error, :clan_not_found})
             loop(state)
@@ -87,7 +87,7 @@ defmodule SERVER do
         case Map.get(invites, invite_id) do
           %{user: user, clan: clan} ->
             # possibly get_and_update_in?
-            user_upd = %{user | clans: MapSet.put(user.clans, clans[clan.id])}
+            user_upd = %{user | clans: MapSet.put(user.clans, clan.id)}
             clans_upd = put_in(clans[clan.id].users, MapSet.put(clans[clan.id].users, user.id))
             invites_upd = Map.delete(invites, invite_id)
             send(caller, {:ok, user_upd})
