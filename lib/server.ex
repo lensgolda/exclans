@@ -48,6 +48,7 @@ defmodule SERVER do
             loop(%{state | clans: Map.put(state.clans, id, clan)})
         end
 
+      # Invites user to clan
       {:invite, user, clan_id, caller} ->
         %{clans: clans, invites: invites} = state
 
@@ -81,6 +82,7 @@ defmodule SERVER do
             loop(state)
         end
 
+      # Accepts invite
       {:accept, invite_id, caller} ->
         %{clans: clans, invites: invites} = state
 
@@ -97,13 +99,15 @@ defmodule SERVER do
             send(caller, {:error, :invite_not_found})
             loop(state)
         end
-
+      
+      # Decline invite
       {:decline, invite_id, caller} ->
         %{invites: invites} = state
         invites_upd = Map.delete(invites, invite_id)
         send(caller, {:ok, :declined})
         loop(%{state | invites: invites_upd})
 
+      # Kicks user from clan
       {:kick, user, clan_id, caller} ->
         clan = state.clans[clan_id]
         case MapSet.member?(clan.users, user.id) do
