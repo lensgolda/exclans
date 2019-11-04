@@ -53,7 +53,7 @@ iex(16)> send(server, {:create, %{name: "Panzer", tag: "[PZR]"}, user, self()})
 {:create, %{name: "Panzer", tag: "[PZR]"},
  %USER{clans: #MapSet<[]>, id: 1, name: "Lens"}, #PID<0.171.0>}
 
-__ Getting error clan name or tag already exists __
+### Getting error clan name or tag already exists
 iex(17)> receive do {:error, err} -> err after 1000 -> "timeout" end  
 :clan_name_or_tag_already_exists
 
