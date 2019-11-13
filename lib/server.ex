@@ -1,14 +1,16 @@
 defmodule Server do
   use GenServer
+  alias Server.Clans, as: Clans
+  alias Server.Invites, as: Invites
 
   # GenServer callbacks
 
   def init(:ok) do
-    {:ok, _} = Server.Clans.start_link()
-    {:ok, _} = Server.Invites.start_link()
+    {:ok, _} = Clans.start_link()
+    {:ok, _} = Invites.start_link()
     # Process.monitor(clans)
     # Process.monitor(invites)
-    {:ok, {Server.Clans.state(), Server.Invites.state()}}
+    {:ok, {Clans.state(), Invites.state()}}
   end
 
   def handle_call({:clans}, _caller, {clans, _} = state) do
@@ -24,15 +26,15 @@ defmodule Server do
   end
 
   def handle_cast({:create, data, _}, {_, invites}) do
-    Server.Clans.put(Clan.new(data.name, data.tag))
-    clans_state = Server.Clans.state()
+    Clans.put(Clan.new(data.name, data.tag))
+    clans_state = Clans.state()
 
     {:noreply, {clans_state, invites}}
   end
 
   def handle_cast({:delete, id}, {_, invites}) do
-    Server.Clans.delete(id)
-    clans_state = Server.Clans.state()
+    Clans.delete(id)
+    clans_state = Clans.state()
     {:noreply, {clans_state, invites}}
   end
   
