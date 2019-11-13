@@ -3,7 +3,7 @@ defmodule Server do
   alias Server.Clans, as: Clans
   alias Server.Invites, as: Invites
 
-  # GenServer callbacks
+  # Server API
 
   def init(:ok) do
     {:ok, _} = Clans.start_link()
@@ -35,7 +35,28 @@ defmodule Server do
   def handle_cast({:delete, id}, {_, invites}) do
     Clans.delete(id)
     clans_state = Clans.state()
+
     {:noreply, {clans_state, invites}}
+  end
+
+  def handle_call({:invite, user, clan_id}, _caller, {clans, invites}) do
+    # TODO
+    IO.puts("Not implemented yet")
+  end
+
+  def handle_cast({:accept, invite_id}, {_, invites}) do
+    # TODO
+    IO.puts("Not implemented yet")
+  end
+
+  def handle_cast({:decline, invite_id}, {_, invites}) do
+    # TODO
+    IO.puts("Not implemented yet")
+  end
+
+  def handle_cast({:kick, user, clan_id}) do
+    # TODO
+    IO.puts("Not implemented yet")
   end
   
   # Client API
@@ -66,12 +87,24 @@ defmodule Server do
   end
 
   # Invite
+  def invite(user, clan_id) do
+    GenServer.call(:server, {:invite, user, clan_id})
+  end
 
   # Accept
+  def accept(invite_id) do
+    GenServer.cast(:server, {:accept, invite_id})
+  end
 
   # Decline
+  def decline(invite_id) do
+    GenServer.cast(:server, {:decline, invite_id})
+  end
 
   # Kick
+  def kick(user, clan_id) do
+    GenServer.cast(:server, {:kick, user, clan_id})
+  end
 
   # defp loop(state) do
   #   receive do
