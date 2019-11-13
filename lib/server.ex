@@ -3,39 +3,65 @@ defmodule Server do
 
   # GenServer callbacks
 
-  @impl true
   def init(:ok) do
-    {:ok, %{}}
+    {:ok, _} = Server.Clans.start_link()
+    {:ok, _} = Server.Invites.start_link()
+    # Process.monitor(clans)
+    # Process.monitor(invites)
+    {:ok, {Server.Clans.state(), Server.Invites.state()}}
   end
 
-  @impl true
-  def handle_call({:all}, caller, clans}) do
-    {:ok, clans}
+  def handle_call({:clans}, _caller, {clans, _} = state) do
+    {:reply, clans, state}
   end
 
-  @impl true
-  def handle_call({:get, id}, caller, clans) do
-    {:ok, Map.fetch(clans, id), clans}
+  def handle_call({:invites}, _caller, {_, invites} = state) do
+    {:reply, invites, state}
+  end
+
+  def handle_call({:get, id}, _caller, {clans, _} = state) do
+    {:reply, Map.fetch(clans, id), state}
+  end
+
+  def handle_cast({:create, data, _}, {_, invites}) do
+    Server.Clans.put(Clan.new(data.name, data.tag))
+    clans_state = Server.Clans.state()
+
+    {:noreply, {clans_state, invites}}
+  end
+
+  def handle_cast({:delete, id}, {_, invites}) do
+    Server.Clans.delete(id)
+    clans_state = Server.Clans.state()
+    {:noreply, {clans_state, invites}}
   end
   
   # Client API
 
-  import UUID
-  import Clan
-
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, :ok, opts)
+  def start_link() do
+    GenServer.start_link(__MODULE__, :ok, name: :server)
   end
 
-  def clans(server) do
-    GenServer.call(server, {:all})
+  def clans() do
+    GenServer.call(:server, {:clans})
   end
 
-  def get(server, id) do
-    GenServer.call(server, {:get, id})
+  def invites() do
+    GenServer.call(:server, {:invites})
+  end
+
+  def get(id) do
+    GenServer.call(:server, {:get, id})
+  end
+
+  def delete(id) do
+    GenServer.cast(:server, {:delete, id})
   end
 
   # Create
+  def create(data, user) do
+    GenServer.cast(:server, {:create, data, user})
+  end
 
   # Invite
 
