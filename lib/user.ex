@@ -1,8 +1,9 @@
 defmodule User do
+  alias Server.Id, as: ID
   defstruct [:id, :name, clans: MapSet.new()]
 
   def new(name) do
-    id = UUID.uuid1()
+    id = ID.generate()
     %User{id: id, name: name}
   end
 end

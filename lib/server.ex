@@ -2,14 +2,16 @@ defmodule Server do
   use GenServer
   alias Server.Clans, as: Clans
   alias Server.Invites, as: Invites
+  alias Server.Id, as: Ids
 
   # Server API
 
   def init(:ok) do
-    {:ok, _} = Clans.start_link()
-    {:ok, _} = Invites.start_link()
-    # Process.monitor(clans)
-    # Process.monitor(invites)
+    {:ok, clans} = Clans.start_link()
+    {:ok, invites} = Invites.start_link()
+    {:ok, _ids} = Ids.start_link()
+    Process.monitor(clans)
+    Process.monitor(invites)
     {:ok, {Clans.state(), Invites.state()}}
   end
 
@@ -25,11 +27,30 @@ defmodule Server do
     {:reply, Map.fetch(clans, id), state}
   end
 
-  def handle_cast({:create, data, _}, {_, invites}) do
-    Clans.put(Clan.new(data.name, data.tag))
-    clans_state = Clans.state()
+  def handle_call({:create, data, user}, {clans, invites} = state) do
 
-    {:noreply, {clans_state, invites}}
+    %{tag: data_tag, name: data_name} = data
+
+    unique? = Enum.find(clans, fn {_, %{tag: tag, name: name}} -> 
+      tag == data.tag || name == data.name
+    end)
+
+    case unique? do
+      {_, %{tag: ^data_tag, name: _}} ->
+        {:reply, :tag_already_exists, state}
+      {_, %{tag: _, name: ^data_name}} ->
+        {:reply, :name_already_exists, state}
+      _ ->
+        clan_new = Clan.new(data.name, data.tag)
+        clan_new = %{clan_new | leader: user.id}
+        clan_new = %{clan_new | users: MapSet.put(clan_new.users, user.id)}
+        Clans.put(clan_new)
+        clans_state = Clans.state()
+
+        {:noreply, {clans_state, invites}}
+        
+    end
+
   end
 
   def handle_cast({:delete, id}, {_, invites}) do
@@ -83,12 +104,12 @@ defmodule Server do
 
   # Create
   def create(data, user) do
-    GenServer.cast(:server, {:create, data, user})
+    GenServer.call(:server, {:create, data, user})
   end
 
   # Invite
   def invite(user, clan_id) do
-    GenServer.call(:server, {:invite, user, clan_id})
+    GenServer.cast(:server, {:invite, user, clan_id})
   end
 
   # Accept
