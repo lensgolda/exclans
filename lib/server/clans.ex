@@ -9,7 +9,7 @@ defmodule Server.Clans do
         Agent.get(:clans, fn clans -> Map.get(clans, id) end)
     end
 
-    def put(%Clan{id: id} = clan) do
+    def put(%Clan{tag: id} = clan) do
         Agent.update(:clans, fn clans -> 
             Map.put(clans, id, clan) 
         end)

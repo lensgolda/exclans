@@ -2,17 +2,19 @@ defmodule Server do
   use GenServer
   alias Server.Clans, as: Clans
   alias Server.Invites, as: Invites
-  alias Server.Id, as: Ids
+  alias Server.Id, as: IdGenerator
 
   # Server API
 
   def init(:ok) do
-    {:ok, clans} = Clans.start_link()
-    {:ok, invites} = Invites.start_link()
-    {:ok, _ids} = Ids.start_link()
-    Process.monitor(clans)
-    Process.monitor(invites)
-    {:ok, {Clans.state(), Invites.state()}}
+    {:ok, clans_server} = Clans.start_link()
+    {:ok, invites_server} = Invites.start_link()
+    {:ok, id_generator} = IdGenerator.start_link()
+    Process.monitor(clans_server)
+    Process.monitor(invites_server)
+    clans = Clans.state()
+    invites = Invites.state()
+    {:ok, {clans, invites}}
   end
 
   def handle_call({:clans}, _caller, {clans, _} = state) do
@@ -31,26 +33,26 @@ defmodule Server do
 
     %{tag: data_tag, name: data_name} = data
 
-    unique? = Enum.find(clans, fn {_, %{tag: tag, name: name}} -> 
-      tag == data.tag || name == data.name
-    end)
+    clan = Map.fetch(clans, data_tag)
 
-    case unique? do
-      {_, %{tag: ^data_tag, name: _}} ->
-        {:reply, :tag_already_exists, state}
-      {_, %{tag: _, name: ^data_name}} ->
-        {:reply, :name_already_exists, state}
-      _ ->
+    case clan do
+      {:ok, %{tag: ^data_tag, name: _}} ->
+        {:reply, :clan_already_exists, state}
+      :error ->
         clan_new = Clan.new(data.name, data.tag)
-        clan_new = %{clan_new | leader: user.id}
-        clan_new = %{clan_new | users: MapSet.put(clan_new.users, user.id)}
-        Clans.put(clan_new)
-        clans_state = Clans.state()
+        clan_new
+          |> clan_new.put(:leader, user.id)
+          |> clan_new.put(:users, MapSet.put(clan_new.users, user.id))
+        # clan_new = %{clan_new | leader: user.id}
+        # clan_new = %{clan_new | users: MapSet.put(clan_new.users, user.id)}
+        # Clans.put(clan_new)
+        # clans_state = Clans.state()
+        
+        clans = Clans.put(clan_new)
 
-        {:noreply, {clans_state, invites}}
+        {:noreply, {clans, invites}}
         
     end
-
   end
 
   def handle_cast({:delete, id}, {_, invites}) do
