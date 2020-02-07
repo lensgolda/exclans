@@ -98,22 +98,23 @@ defmodule Server do
     GenServer.call(:server, {:invites})
   end
 
-  def get(id) do
-    GenServer.call(:server, {:get, id})
+  def get(tag) do
+    GenServer.call(:server, {:get, tag})
   end
 
-  def delete(id) do
-    GenServer.cast(:server, {:delete, id})
+  def delete(tag) do
+    GenServer.cast(:server, {:delete, tag})
   end
 
   # Create
   def create(data, user) do
+    # %{tag: tag, name: name} = data
     GenServer.call(:server, {:create, data, user})
   end
 
   # Invite
-  def invite(user, clan_id) do
-    GenServer.cast(:server, {:invite, user, clan_id})
+  def invite(user, clan_tag) do
+    GenServer.cast(:server, {:invite, user, clan_tag})
   end
 
   # Accept
