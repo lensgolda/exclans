@@ -25,8 +25,8 @@ defmodule Server do
     {:reply, invites, state}
   end
 
-  def handle_call({:get, id}, _caller, {clans, _} = state) do
-    {:reply, Map.fetch(clans, id), state}
+  def handle_call({:get, tag}, _caller, {clans, _} = state) do
+    {:reply, Map.fetch(clans, tag), state}
   end
 
   def handle_call({:create, data, user}, {clans, invites} = state) do
@@ -55,14 +55,16 @@ defmodule Server do
     end
   end
 
-  def handle_cast({:delete, id}, {_, invites}) do
-    Clans.delete(id)
-    clans_state = Clans.state()
+  def handle_cast({:delete, tag}, {_, invites}) do
+    # Clans.delete(tag)
+    # clans_state = Clans.state()
+    
+    clans = Clans.delete(tag)
 
-    {:noreply, {clans_state, invites}}
+    {:noreply, {clans, invites}}
   end
 
-  def handle_call({:invite, user, clan_id}, _caller, {clans, invites}) do
+  def handle_call({:invite, user, clan_tag}, _caller, {clans, invites}) do
     # TODO
     IO.puts("Not implemented yet")
   end
