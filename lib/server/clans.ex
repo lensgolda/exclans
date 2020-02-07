@@ -5,19 +5,19 @@ defmodule Server.Clans do
         Agent.start_link(fn -> %{} end, name: :clans)
     end
 
-    def get(id) do
-        Agent.get(:clans, fn clans -> Map.get(clans, id) end)
+    def get(tag) do
+        Agent.get(:clans, fn clans -> Map.get(clans, tag) end)
     end
 
-    def put(%Clan{tag: id} = clan) do
+    def put(%Clan{tag: tag} = clan) do
         Agent.update(:clans, fn clans -> 
-            Map.put(clans, id, clan) 
+            Map.put(clans, tag, clan) 
         end)
     end
 
-    def delete(id) do
+    def delete(tag) do
         Agent.get_and_update(:clans, fn clans -> 
-            Map.pop(clans, id) 
+            Map.pop(clans, tag) 
         end)
     end
 
