@@ -29,7 +29,7 @@ defmodule Server do
     {:reply, Map.fetch(clans, tag), state}
   end
 
-  def handle_call({:create, data, user}, {clans, invites} = state) do
+  def handle_call({:create, data, user}, _caller, {clans, invites} = state) do
 
     %{tag: data_tag, name: data_name} = data
 
@@ -39,29 +39,29 @@ defmodule Server do
       {:ok, %{tag: ^data_tag, name: _}} ->
         {:reply, :clan_already_exists, state}
       :error ->
-        clan_new = Clan.new(data.name, data.tag)
-        clan_new
-          |> clan_new.put(:leader, user.id)
-          |> clan_new.put(:users, MapSet.put(clan_new.users, user.id))
-        # clan_new = %{clan_new | leader: user.id}
-        # clan_new = %{clan_new | users: MapSet.put(clan_new.users, user.id)}
-        # Clans.put(clan_new)
-        # clans_state = Clans.state()
-        
-        clans = Clans.put(clan_new)
+        clan_new = 
+          Clan.new(data_name, data_tag)
+            |> Map.put(:leader, user.id)
+            |> Map.update!(:users, &(MapSet.put(&1, user.id)))
 
-        {:noreply, {clans, invites}}
-        
+        IO.puts("New clan created: #{clan_new.name}")
+
+        Clans.put(clan_new)
+        clans_state = Clans.state()
+
+        {:reply, clan_new, {clans_state, invites}}
     end
   end
 
   def handle_cast({:delete, tag}, {_, invites}) do
-    # Clans.delete(tag)
-    # clans_state = Clans.state()
-    
-    clans = Clans.delete(tag)
+
+    Clans.delete(tag)
+    clans = Clans.state()
+
+    IO.puts("Clan #{tag} successfully deleted")
 
     {:noreply, {clans, invites}}
+
   end
 
   def handle_call({:invite, user, clan_tag}, _caller, {clans, invites}) do
@@ -108,7 +108,10 @@ defmodule Server do
 
   # Create
   def create(data, user) do
-    # %{tag: tag, name: name} = data
+    @type clan_tag :: String.t
+    @type clan_name :: String.t
+    @type clan_data :: %{tag: clan_tag, name: clan_name}
+
     GenServer.call(:server, {:create, data, user})
   end
 
