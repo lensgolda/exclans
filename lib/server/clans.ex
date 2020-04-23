@@ -6,7 +6,8 @@ defmodule Server.Clans do
     end
 
     def get(tag) do
-        Agent.get(:clans, fn clans -> Map.get(clans, tag) end)
+        Agent.get(:clans, fn clans -> 
+            Map.get(clans, tag) end)
     end
 
     def put(%Clan{tag: tag} = clan) do

@@ -1,5 +1,5 @@
 defmodule Server do
-  use GenServer
+  use GenServer, restart: :transient
   alias Server.Clans, as: Clans
   alias Server.Invites, as: Invites
   alias Server.Id, as: IdGenerator
@@ -23,6 +23,7 @@ defmodule Server do
 
     Process.monitor(clans_server)
     Process.monitor(invites_server)
+    Process.monitor(id_generator)
 
     clans = Clans.state()
     invites = Invites.state()
@@ -42,18 +43,18 @@ defmodule Server do
     {:reply, Map.fetch(clans, tag), state}
   end
 
-  def handle_call({:create, data, user}, _caller, {clans, invites} = state) do
+  def handle_call({:create, data, user}, _caller, {_, invites} = state) do
 
     %{tag: data_tag, name: data_name} = data
 
-    clan = Map.fetch(clans, data_tag)
+    clan = Clans.get(data_tag)
 
     case clan do
 
-      {:ok, %{tag: ^data_tag, name: _}} ->
+      %{tag: ^data_tag} ->
         {:reply, :clan_already_exists, state}
 
-      :error ->
+      nil ->
         clan_new = 
           Clan.new(data_name, data_tag)
             |> Map.put(:leader, user.id)
@@ -79,9 +80,29 @@ defmodule Server do
 
   end
 
-  def handle_call({:invite, user, clan_tag}, _caller, {clans, invites}) do
-    # TODO
-    IO.puts("Not implemented yet")
+  def handle_call({:invite, leader_id, user, clan_tag}, _caller, {clans, _} = state) do
+    
+    invite = Invites.get(user.id)
+
+    if not is_nil(invite) && MapSet.member?(invite, clan_tag) do
+      {:reply, :already_invited, state}
+    else
+      clan = Clans.get(clan_tag)
+
+      case clan do
+        %{leader: clan_leader_id} when clan_leader_id !== leader_id ->
+          {:reply, :only_clan_leader_can_invite, state}
+        %{tag: tag, users: clan_users} ->
+          if MapSet.member?(clan_users, user.id) do
+            {:reply, :user_already_in_clan, state}
+          else
+            invites_state = Invites.put(user.id, tag)
+            {:reply, Base.encode64(to_string(user.id) <> "." <>tag), {clans, invites_state}}
+          end
+        nil ->
+          {:reply, :clan_not_found, state}
+      end
+    end
   end
 
   def handle_cast({:accept, invite_id}, {_, invites}) do
@@ -133,8 +154,8 @@ defmodule Server do
   end
 
   # Invite
-  def invite(user, clan_tag) do
-    GenServer.cast(:server, {:invite, user, clan_tag})
+  def invite(leader_id, user, clan_tag) do
+    GenServer.call(:server, {:invite, leader_id, user, clan_tag})
   end
 
   # Accept

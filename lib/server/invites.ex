@@ -11,9 +11,9 @@ defmodule Server.Invites do
         end)
     end
 
-    def put(id, clan) do
+    def put(id, invite) do
         Agent.update(:invites, fn invites -> 
-            Map.put(invites, id, clan) 
+            Map.update(invites, id, MapSet.new([invite]), &(MapSet.put(&1, invite)))
         end)
     end
 
