@@ -19,7 +19,7 @@ defmodule Server.Invites do
 
     def delete(id) do
         Agent.get_and_update(:invites, fn invites -> 
-            Map.pop(invites, id) 
+            Map.pop(invites, id)
         end)
     end
 

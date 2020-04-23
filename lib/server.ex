@@ -17,18 +17,15 @@ defmodule Server do
   # Server API
 
   def init(:ok) do
-    {:ok, clans_server} = Clans.start_link()
-    {:ok, invites_server} = Invites.start_link()
-    {:ok, id_generator} = IdGenerator.start_link()
+    {:ok, _} = Clans.start_link()
+    {:ok, _} = Invites.start_link()
+    {:ok, _} = IdGenerator.start_link()
 
-    Process.monitor(clans_server)
-    Process.monitor(invites_server)
-    Process.monitor(id_generator)
+    # Process.monitor(clans_server)
+    # Process.monitor(invites_server)
+    # Process.monitor(id_generator)
 
-    clans = Clans.state()
-    invites = Invites.state()
-
-    {:ok, {clans, invites}}
+    {:ok, {Clans.state, Invites.state}}
   end
 
   def handle_call({:clans}, _caller, {clans, _} = state) do
@@ -60,29 +57,28 @@ defmodule Server do
             |> Map.put(:leader, user.id)
             |> Map.update!(:users, &(MapSet.put(&1, user.id)))
 
+        Clans.put(clan_new)
         IO.puts("New clan created: #{clan_new.name}")
 
-        Clans.put(clan_new)
-        clans_state = Clans.state()
-
-        {:reply, clan_new, {clans_state, invites}}
+        {:reply, clan_new, {Clans.state, invites}}
     end
   end
 
-  def handle_cast({:delete, tag}, {_, invites}) do
+  def handle_cast({:delete, tag}, {_, invites} = state) do
 
-    Clans.delete(tag)
-    clans = Clans.state()
-
-    IO.puts("Clan #{tag} successfully deleted")
-
-    {:noreply, {clans, invites}}
-
+    case Clans.delete(tag) do
+      nil -> 
+        IO.puts("Clan with tag #{tag} not exists")
+        {:noreply, state}
+      _ ->
+        IO.puts("Clan #{tag} successfully deleted")
+        {:noreply, {Clans.state, invites}}
+    end
   end
 
-  def handle_call({:invite, leader_id, user, clan_tag}, _caller, {clans, _} = state) do
+  def handle_cast({:invite, leader_id, user_id, clan_tag}, _caller, {clans, _} = state) do
     
-    invite = Invites.get(user.id)
+    invite = Invites.get(user_id)
 
     if not is_nil(invite) && MapSet.member?(invite, clan_tag) do
       {:reply, :already_invited, state}
@@ -91,16 +87,19 @@ defmodule Server do
 
       case clan do
         %{leader: clan_leader_id} when clan_leader_id !== leader_id ->
-          {:reply, :only_clan_leader_can_invite, state}
+          IO.puts("Only clan leader can invite")
+          {:noreply, state}
         %{tag: tag, users: clan_users} ->
-          if MapSet.member?(clan_users, user.id) do
-            {:reply, :user_already_in_clan, state}
+          if MapSet.member?(clan_users, user_id) do
+            IO.puts("User already in clan")
+            {:noreply, state}
           else
-            invites_state = Invites.put(user.id, tag)
-            {:reply, Base.encode64(to_string(user.id) <> "." <>tag), {clans, invites_state}}
+            Invites.put(user_id, tag)
+            {:noreply, {clans, Invites.state}}
           end
         nil ->
-          {:reply, :clan_not_found, state}
+          IO.puts("Clan not found")
+          {:reply, state}
       end
     end
   end
@@ -154,8 +153,8 @@ defmodule Server do
   end
 
   # Invite
-  def invite(leader_id, user, clan_tag) do
-    GenServer.call(:server, {:invite, leader_id, user, clan_tag})
+  def invite(leader_id, user_id, clan_tag) do
+    GenServer.cast(:server, {:invite, leader_id, user_id, clan_tag})
   end
 
   # Accept
