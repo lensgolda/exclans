@@ -76,7 +76,7 @@ defmodule Server do
     end
   end
 
-  def handle_cast({:invite, leader_id, user_id, clan_tag}, _caller, {clans, _} = state) do
+  def handle_cast({:invite, leader_id, user_id, clan_tag}, {clans, _} = state) do
     
     invite = Invites.get(user_id)
 
