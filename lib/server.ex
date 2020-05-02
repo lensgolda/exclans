@@ -161,8 +161,6 @@ defmodule Server do
   end
 
   def handle_cast({:decline, user, clan_tag}, {clans, _} = state) do
-    # TODO
-    IO.puts("Not implemented yet")
     invite = Invites.get(user.id)
 
     case invite do
@@ -180,23 +178,49 @@ defmodule Server do
     end
   end
 
-  def handle_cast({:kick, user, clan_id}) do
-    # TODO
-    IO.puts("Not implemented yet")
+  def handle_call({:kick, user, clan_tag}, _caller, {_, invites} = state) do
+    clan = Clans.get(clan_tag)
+
+    case clan do
+      nil ->
+        IO.puts("Clan not found")
+        {:reply, :clan_not_found, state}
+
+      %Clan{users: clan_users, tag: clan_tag} ->
+        cond do
+          not MapSet.member?(clan_users, user.id) ->
+            IO.puts("User is not member of clan #{clan_tag}")
+            {:reply, :user_is_not_clan_member, state}
+
+          not MapSet.member?(user.clans, clan_tag) ->
+            IO.puts("User is not in clan #{clan_tag}")
+            {:reply, :user_is_not_clan_member, state}
+
+          true ->
+            clan_upd = Map.update(clan, :users, MapSet.new(), &MapSet.delete(&1, user.id))
+            Clans.put(clan_upd)
+            user_upd = Map.update(user, :clans, MapSet.new(), &MapSet.delete(&1, clan_tag))
+            {:reply, user_upd, {Clans.state(), invites}}
+        end
+
+      _ ->
+        IO.puts("Unknown invite kick error")
+        {:reply, :unknown_kick_error, state}
+    end
   end
 
   # Client API
 
   # for testing
-  def init() do
-    {_, server} = Server.start_link()
-    user1 = User.new("User1")
-    user2 = User.new("User2")
-    user3 = User.new("User3")
-    {clan1, user1} = Server.create(%{tag: "clan1", name: "Clan1"}, user1)
-    {clan2, user2} = Server.create(%{tag: "clan2", name: "Clan2"}, user2)
-    {server, user1, user2, user3, clan1, clan2}
-  end
+  # def init() do
+  #   {_, server} = Server.start_link()
+  #   user1 = User.new("User1")
+  #   user2 = User.new("User2")
+  #   user3 = User.new("User3")
+  #   {clan1, user1} = Server.create(%{tag: "clan1", name: "Clan1"}, user1)
+  #   {clan2, user2} = Server.create(%{tag: "clan2", name: "Clan2"}, user2)
+  #   {server, user1, user2, user3, clan1, clan2}
+  # end
 
   def start_link() do
     GenServer.start_link(__MODULE__, :ok, name: :server)
@@ -241,12 +265,12 @@ defmodule Server do
   end
 
   # Decline
-  def decline(invite_id, clan_tag) do
-    GenServer.cast(:server, {:decline, invite_id, clan_tag})
+  def decline(user, clan_tag) do
+    GenServer.cast(:server, {:decline, user, clan_tag})
   end
 
   # Kick
-  def kick(user, clan_id) do
-    GenServer.cast(:server, {:kick, user, clan_id})
+  def kick(user, clan_tag) do
+    GenServer.call(:server, {:kick, user, clan_tag})
   end
 end
