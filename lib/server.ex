@@ -58,7 +58,10 @@ defmodule Server do
         Clans.put(clan_new)
         IO.puts("New clan created: #{clan_new.name}")
 
-        {:reply, clan_new, {Clans.state(), invites}}
+        user_upd =
+          Map.update(user, :clans, MapSet.new([clan_new.tag]), &MapSet.put(&1, clan_new.tag))
+
+        {:reply, {clan_new, user_upd}, {Clans.state(), invites}}
     end
   end
 
@@ -77,30 +80,31 @@ defmodule Server do
   def handle_call({:invite, leader_id, user_id, clan_tag}, _caller, {clans, _} = state) do
     invite = Invites.get(user_id)
 
-    if not is_nil(invite) && MapSet.member?(invite, clan_tag) do
-      IO.puts("Already invited")
-      {:reply, :already_invited, state}
-    else
-      clan = Clans.get(clan_tag)
+    invite = if is_nil(invite), do: MapSet.new(), else: invite
 
-      case clan do
-        %{leader: clan_leader_id} when clan_leader_id !== leader_id ->
-          IO.puts("Only clan leader can invite")
-          {:reply, :only_leader_can_invite, state}
+    case Clans.get(clan_tag) do
+      %{leader: clan_leader_id} when clan_leader_id !== leader_id ->
+        IO.puts("Only clan leader can invite")
+        {:reply, :only_leader_can_invite, state}
 
-        %{tag: tag, users: clan_users} ->
-          if MapSet.member?(clan_users, user_id) do
+      %{tag: tag, users: clan_users} ->
+        cond do
+          MapSet.member?(invite, clan_tag) ->
+            IO.puts("Already invited")
+            {:reply, :already_invited, state}
+
+          MapSet.member?(clan_users, user_id) ->
             IO.puts("User already in clan")
             {:reply, :already_in_clan, state}
-          else
+
+          true ->
             Invites.put(user_id, tag)
             {:reply, %{invite_id: user_id, clans: Invites.get(user_id)}, {clans, Invites.state()}}
-          end
+        end
 
-        nil ->
-          IO.puts("Clan not found")
-          {:reply, :clan_not_found, state}
-      end
+      nil ->
+        IO.puts("Clan not found")
+        {:reply, :clan_not_found, state}
     end
   end
 
@@ -115,34 +119,65 @@ defmodule Server do
       %MapSet{} ->
         invite_clan =
           invite
+          |> MapSet.intersection(MapSet.new([clan_tag]))
           |> MapSet.to_list()
           |> List.first()
 
-        if invite_clan !== clan_tag do
-          {:reply, :no_invites_found_for_clan, state}
-        else
-          invites_upd = Invites.delete(user.id, invite_clan)
-          clan = Clans.get(invite_clan)
+        cond do
+          MapSet.member?(user.clans, clan_tag) ->
+            IO.puts("User already in clan")
+            {:reply, :already_in_clan, state}
 
-          case clan do
-            nil ->
-              IO.puts("Clan not found")
-              {:reply, :clan_not_found, state}
+          invite_clan !== clan_tag ->
+            {:reply, :no_invites_found_for_clan, state}
 
-            %Clan{} ->
-              clan_upd = Map.update(clan, :users, MapSet.new(), &MapSet.put(&1, user.id))
-              Clans.put(clan_upd)
-          end
+          true ->
+            Invites.delete(user.id, invite_clan)
+            clan = Clans.get(invite_clan)
 
-          {:reply, Map.update(user, :clans, MapSet.new(), &MapSet.put(&1, clan_tag)),
-           {Clans.state(), Invites.state()}}
+            case clan do
+              nil ->
+                IO.puts("Clan not found")
+                {:reply, :clan_not_found, state}
+
+              %Clan{} ->
+                clan_upd = Map.update(clan, :users, MapSet.new(), &MapSet.put(&1, user.id))
+                Clans.put(clan_upd)
+
+              _ ->
+                IO.puts("Unknown invite accept error")
+                {:reply, :unknown_accept_error, state}
+            end
+
+            user_upd = Map.update(user, :clans, MapSet.new(), &MapSet.put(&1, clan_tag))
+
+            {:reply, user_upd, {Clans.state(), Invites.state()}}
         end
+
+      _ ->
+        IO.puts("Unknown invite accept error")
+        {:reply, :unknown_accept_error, state}
     end
   end
 
-  def handle_cast({:decline, invite_id}, {_, invites}) do
+  def handle_cast({:decline, user, clan_tag}, {clans, _} = state) do
     # TODO
     IO.puts("Not implemented yet")
+    invite = Invites.get(user.id)
+
+    case invite do
+      nil ->
+        IO.puts("Invite not found")
+        {:noreply, state}
+
+      %MapSet{} ->
+        Invites.delete(user.id, clan_tag)
+        {:noreply, {clans, Invites.state()}}
+
+      _ ->
+        IO.puts("Unknown invite decline error")
+        {:noreply, state}
+    end
   end
 
   def handle_cast({:kick, user, clan_id}) do
@@ -158,9 +193,9 @@ defmodule Server do
     user1 = User.new("User1")
     user2 = User.new("User2")
     user3 = User.new("User3")
-    clan1 = Server.create(%{tag: "clan1", name: "Clan1"}, user1)
-    clan2 = Server.create(%{tag: "clan2", name: "Clan2"}, user2)
-    {server, user1, user2, user3, clan1}
+    {clan1, user1} = Server.create(%{tag: "clan1", name: "Clan1"}, user1)
+    {clan2, user2} = Server.create(%{tag: "clan2", name: "Clan2"}, user2)
+    {server, user1, user2, user3, clan1, clan2}
   end
 
   def start_link() do
@@ -201,13 +236,13 @@ defmodule Server do
   end
 
   # Accept
-  def accept(user, clan_id) do
-    GenServer.call(:server, {:accept, user, clan_id})
+  def accept(user, clan_tag) do
+    GenServer.call(:server, {:accept, user, clan_tag})
   end
 
   # Decline
-  def decline(invite_id) do
-    GenServer.cast(:server, {:decline, invite_id})
+  def decline(invite_id, clan_tag) do
+    GenServer.cast(:server, {:decline, invite_id, clan_tag})
   end
 
   # Kick
