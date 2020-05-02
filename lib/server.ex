@@ -178,6 +178,7 @@ defmodule Server do
     end
   end
 
+  # TODO: only clan leader can kick users from clan
   def handle_call({:kick, user, clan_tag}, _caller, {_, invites} = state) do
     clan = Clans.get(clan_tag)
 
@@ -186,8 +187,12 @@ defmodule Server do
         IO.puts("Clan not found")
         {:reply, :clan_not_found, state}
 
-      %Clan{users: clan_users, tag: clan_tag} ->
+      %Clan{users: clan_users, tag: clan_tag, leader: leader_id} ->
         cond do
+          leader_id == user.id ->
+            IO.puts("Clan leader can't be kicked")
+            {:reply, :leader_cant_be_kicked, state}
+
           not MapSet.member?(clan_users, user.id) ->
             IO.puts("User is not member of clan #{clan_tag}")
             {:reply, :user_is_not_clan_member, state}
