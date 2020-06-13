@@ -18,111 +18,55 @@
 ## usage example
 
 ```elixir
-
-{:ok, server} = SERVER.start()
-{:ok, #PID<0.188.0>}
-
-leader = %USER{id: 1, name: "Lens"}
-%USER{clans: #MapSet<[]>, id: 1, name: "Lens"}
-
-
-### Creating clan
-
-send(server, {:create, %{name: "Panzer", tag: "[PZR]"}, leader, self()})
-{:create, %{name: "Panzer", tag: "[PZR]"},
- %USER{clans: #MapSet<[]>, id: 1, name: "Lens"}, #PID<0.171.0>}
-
-### List all clans
-
-iex(14)> send(server, {:list, self()})                                         
-{:list, #PID<0.171.0>}
-iex(15)> receive do {_, data} -> data after 1000 -> "timeout" end
+iex(16)> {_, server} = Server.start()                                                                                                                                              
+{:ok, #PID<0.381.0>}                                                                                                                                                               
+iex(17)> user1 = User.new("User1")                                                                                                                                                 
+%User{clans: #MapSet<[]>, id: 1, name: "User1"}                                                                                                                                    
+iex(18)> user2 = User.new("User2")
+%User{clans: #MapSet<[]>, id: 2, name: "User2"}
+iex(19)> user3 = User.new("User3")
+%User{clans: #MapSet<[]>, id: 3, name: "User3"}
+iex(20)> {clan1, user1} = Server.create(%{tag: "clan1", name: "Clan1"}, user1)
+New clan created: Clan1
+{%Clan{leader: 1, name: "Clan1", tag: "clan1", users: #MapSet<[1]>},
+ %User{clans: #MapSet<["clan1"]>, id: 1, name: "User1"}}
+iex(21)> {clan2, user2} = Server.create(%{tag: "clan2", name: "Clan2"}, user2)
+New clan created: Clan2
+{%Clan{leader: 2, name: "Clan2", tag: "clan2", users: #MapSet<[2]>},
+ %User{clans: #MapSet<["clan2"]>, id: 2, name: "User2"}}
+iex(22)> Server.clans
 %{
-  "13eb1a6c-fdc8-11e9-8f5c-186590cd49e7" => %CLAN{
-    id: "13eb1a6c-fdc8-11e9-8f5c-186590cd49e7",
-    leader: 1,
-    name: "Panzer",
-    tag: "[PZR]",
-    users: #MapSet<[1]>
-  }
+  "clan1" => %Clan{leader: 1, name: "Clan1", tag: "clan1", users: #MapSet<[1]>},
+  "clan2" => %Clan{leader: 2, name: "Clan2", tag: "clan2", users: #MapSet<[2]>}
 }
-
-### Trying create another one with the same name or tag
-
-iex(16)> send(server, {:create, %{name: "Panzer", tag: "[PZR]"}, user, self()})
-{:create, %{name: "Panzer", tag: "[PZR]"},
- %USER{clans: #MapSet<[]>, id: 1, name: "Lens"}, #PID<0.171.0>}
-
-### Getting error clan name or tag already exists
-iex(17)> receive do {:error, err} -> err after 1000 -> "timeout" end  
-:clan_name_or_tag_already_exists
-
-### Creating another user
-
-iex(18)> user2 = %USER{id: 2, name: "John"}
-%USER{clans: #MapSet<[]>, id: 2, name: "John"}
-
-### Inviting him to existing clan
-
-iex(19)> send(server, {:invite, user2, "13eb1a6c-fdc8-11e9-8f5c-186590cd49e7", self()})
-{:invite, %USER{clans: #MapSet<[]>, id: 2, name: "John"},
- "13eb1a6c-fdc8-11e9-8f5c-186590cd49e7", #PID<0.171.0>}
-iex(20)> receive do {_, data} -> data after 1000 -> "timeout" end                       
-"f13b3992-fdc8-11e9-a980-186590cd49e7"
-
-### Accepting invite
-
-iex(21)> send(server, {:accept, "f13b3992-fdc8-11e9-a980-186590cd49e7", self()})
-{:accept, "f13b3992-fdc8-11e9-a980-186590cd49e7", #PID<0.171.0>}
-iex(22)> receive do {_, data} -> data after 1000 -> "timeout" end               
-%USER{
-  clans: #MapSet<[
-    %CLAN{
-      id: "13eb1a6c-fdc8-11e9-8f5c-186590cd49e7",
-      leader: 1,
-      name: "Panzer",
-      tag: "[PZR]",
-      users: #MapSet<[1]>
-    }
-  ]>,
-  id: 2,
-  name: "John"
-}
-
-### Checking user2 accepted properly to clan
-
-iex(23)> send(server, {:list, self()})                                                                              
-{:list, #PID<0.171.0>}
-iex(24)> receive do {_, data} -> data after 1000 -> "timeout" end
+iex(23)> Server.invites
+%{}
+iex(24)> Server.invite(user1, user3, clan2)
+Only clan leader can invite
+:only_leader_can_invite
+iex(25)> Server.invite(user1, user3, clan1)
+%{clans: #MapSet<["clan1"]>, invite_id: 3}
+iex(26)> Server.invite(user2, user3, clan2)
+%{clans: #MapSet<["clan1", "clan2"]>, invite_id: 3}
+iex(27)> Server.decline(user3, clan2.tag)
+:ok
+iex(28)> Server.invites
+%{3 => #MapSet<["clan1"]>}
+iex(29)> Server.accept(user3,clan1.tag)
+%User{clans: #MapSet<["clan1"]>, id: 3, name: "User3"}
+iex(30)> Server.clans
 %{
-  "13eb1a6c-fdc8-11e9-8f5c-186590cd49e7" => %CLAN{
-    id: "13eb1a6c-fdc8-11e9-8f5c-186590cd49e7",
+  "clan1" => %Clan{
     leader: 1,
-    name: "Panzer",
-    tag: "[PZR]",
-    users: #MapSet<[1, 2]>
-  }
+    name: "Clan1",
+    tag: "clan1",
+    users: #MapSet<[1, 3]>
+  },
+  "clan2" => %Clan{leader: 2, name: "Clan2", tag: "clan2", users: #MapSet<[2]>}
 }
-
-### Kicking user2 from clan
-
-iex(25)> send(server, {:kick, user2, "13eb1a6c-fdc8-11e9-8f5c-186590cd49e7", self()})
-{:kick, %USER{clans: #MapSet<[]>, id: 2, name: "John"},
- "13eb1a6c-fdc8-11e9-8f5c-186590cd49e7", #PID<0.171.0>}
-iex(26)> receive do {_, data} -> data after 1000 -> "timeout" end                    
-:kicked
-iex(27)> send(server, {:list, self()})                                               
-{:list, #PID<0.171.0>}
-iex(28)> receive do {_, data} -> data after 1000 -> "timeout" end
-%{
-  "13eb1a6c-fdc8-11e9-8f5c-186590cd49e7" => %CLAN{
-    id: "13eb1a6c-fdc8-11e9-8f5c-186590cd49e7",
-    leader: 1,
-    name: "Panzer",
-    tag: "[PZR]",
-    users: #MapSet<[1]>
-  }
-}
+iex(31)> Server.invites
+%{3 => #MapSet<[]>}
+iex(32)>
 ```
 
 

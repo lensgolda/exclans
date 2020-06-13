@@ -36,47 +36,6 @@ defmodule Server do
     {:reply, invites, state}
   end
 
-  def handle_call({:get, tag}, _caller, {clans, _} = state) do
-    {:reply, Map.fetch(clans, tag), state}
-  end
-
-  def handle_call({:create, data, user}, _caller, {_, invites} = state) do
-    %{tag: data_tag, name: data_name} = data
-
-    clan = Clans.get(data_tag)
-
-    case clan do
-      %{tag: ^data_tag} ->
-        {:reply, :clan_already_exists, state}
-
-      nil ->
-        clan_new =
-          Clan.new(data_name, data_tag)
-          |> Map.put(:leader, user.id)
-          |> Map.update(:users, MapSet.new(), &MapSet.put(&1, user.id))
-
-        Clans.put(clan_new)
-        IO.puts("New clan created: #{clan_new.name}")
-
-        user_upd =
-          Map.update(user, :clans, MapSet.new([clan_new.tag]), &MapSet.put(&1, clan_new.tag))
-
-        {:reply, {clan_new, user_upd}, {Clans.state(), invites}}
-    end
-  end
-
-  def handle_cast({:delete, tag}, {_, invites} = state) do
-    case Clans.delete(tag) do
-      nil ->
-        IO.puts("Clan with tag #{tag} not exists")
-        {:noreply, state}
-
-      _ ->
-        IO.puts("Clan #{tag} successfully deleted")
-        {:noreply, {Clans.state(), invites}}
-    end
-  end
-
   def handle_call({:invite, leader_id, user_id, clan_tag}, _caller, {clans, _} = state) do
     invite = Invites.get(user_id)
 
@@ -120,8 +79,8 @@ defmodule Server do
         invite_clan =
           invite
           |> MapSet.intersection(MapSet.new([clan_tag]))
-          |> MapSet.to_list()
-          |> List.first()
+          |> MapSet.to_list
+          |> List.first
 
         cond do
           MapSet.member?(user.clans, clan_tag) ->
@@ -160,21 +119,32 @@ defmodule Server do
     end
   end
 
-  def handle_cast({:decline, user, clan_tag}, {clans, _} = state) do
-    invite = Invites.get(user.id)
+  def handle_call({:get, tag}, _caller, {clans, _} = state) do
+    {:reply, Map.fetch(clans, tag), state}
+  end
 
-    case invite do
+  def handle_call({:create, data, user}, _caller, {_, invites} = state) do
+    %{tag: data_tag, name: data_name} = data
+
+    clan = Clans.get(data_tag)
+
+    case clan do
+      %{tag: ^data_tag} ->
+        {:reply, :clan_already_exists, state}
+
       nil ->
-        IO.puts("Invite not found")
-        {:noreply, state}
+        clan_new =
+          Clan.new(data_name, data_tag)
+          |> Map.put(:leader, user.id)
+          |> Map.update(:users, MapSet.new(), &MapSet.put(&1, user.id))
 
-      %MapSet{} ->
-        Invites.delete(user.id, clan_tag)
-        {:noreply, {clans, Invites.state()}}
+        Clans.put(clan_new)
+        IO.puts("New clan created: #{clan_new.name}")
 
-      _ ->
-        IO.puts("Unknown invite decline error")
-        {:noreply, state}
+        user_upd =
+          Map.update(user, :clans, MapSet.new([clan_new.tag]), &MapSet.put(&1, clan_new.tag))
+
+        {:reply, {clan_new, user_upd}, {Clans.state(), invites}}
     end
   end
 
@@ -214,6 +184,36 @@ defmodule Server do
     end
   end
 
+  def handle_cast({:delete, tag}, {_, invites} = state) do
+    case Clans.delete(tag) do
+      nil ->
+        IO.puts("Clan with tag #{tag} not exists")
+        {:noreply, state}
+
+      _ ->
+        IO.puts("Clan #{tag} successfully deleted")
+        {:noreply, {Clans.state(), invites}}
+    end
+  end
+
+  def handle_cast({:decline, user, clan_tag}, {clans, _} = state) do
+    invite = Invites.get(user.id)
+
+    case invite do
+      nil ->
+        IO.puts("Invite not found")
+        {:noreply, state}
+
+      %MapSet{} ->
+        Invites.delete(user.id, clan_tag)
+        {:noreply, {clans, Invites.state()}}
+
+      _ ->
+        IO.puts("Unknown invite decline error")
+        {:noreply, state}
+    end
+  end
+
   # Client API
 
   # for testing
@@ -227,7 +227,7 @@ defmodule Server do
   #   {server, user1, user2, user3, clan1, clan2}
   # end
 
-  def start_link() do
+  def start() do
     GenServer.start_link(__MODULE__, :ok, name: :server)
   end
 
