@@ -1,4 +1,4 @@
-# CLAN
+# Gaming clans server implementation
 
 ## requirements
 
